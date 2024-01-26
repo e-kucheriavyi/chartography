@@ -1,10 +1,12 @@
 {
 	"name": "chartography",
-	"version": "0.0.1",
+	"version": "0.0.2",
 	"description": "Charts on canvas",
 	"main": "index.js",
 	"scripts": {
-		"test": "echo \"Error: no test specified\" && exit 1"
+		"test": "echo \"Error: no test specified\" && exit 1",
+		"storybook": "storybook dev -p 6006",
+		"build-storybook": "storybook build"
 	},
 	"repository": {
 		"type": "git",
@@ -20,5 +22,17 @@
 	"bugs": {
 		"url": "https://github.com/e-kucheriavyi/chartography/issues"
 	},
-	"homepage": "https://github.com/e-kucheriavyi/chartography#readme"
+	"homepage": "https://github.com/e-kucheriavyi/chartography#readme",
+	"devDependencies": {
+		"@storybook/addon-essentials": "^7.6.10",
+		"@storybook/addon-interactions": "^7.6.10",
+		"@storybook/addon-links": "^7.6.10",
+		"@storybook/blocks": "^7.6.10",
+		"@storybook/html": "^7.6.10",
+		"@storybook/html-vite": "^7.6.10",
+		"@storybook/test": "^7.6.10",
+		"react": "^18.2.0",
+		"react-dom": "^18.2.0",
+		"storybook": "^7.6.10"
+	}
 }
