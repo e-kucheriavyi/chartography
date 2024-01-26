@@ -1,4 +1,4 @@
-import { Heatmap } from '../heatmap.js'
+import { Heatmap } from '../src/heatmap.js'
 
 // More on how to set up stories at: https://storybook.js.org/docs/writing-stories
 export default {
