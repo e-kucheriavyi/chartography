@@ -1,0 +1,24 @@
+{
+	"name": "chartography",
+	"version": "0.0.1",
+	"description": "Charts on canvas",
+	"main": "index.js",
+	"scripts": {
+		"test": "echo \"Error: no test specified\" && exit 1"
+	},
+	"repository": {
+		"type": "git",
+		"url": "git+https://github.com/e-kucheriavyi/chartography.git"
+	},
+	"keywords": [
+		"charts",
+		"canvas",
+		"js"
+	],
+	"author": "Evgenii Kucheriavyi",
+	"license": "GPL-3.0",
+	"bugs": {
+		"url": "https://github.com/e-kucheriavyi/chartography/issues"
+	},
+	"homepage": "https://github.com/e-kucheriavyi/chartography#readme"
+}
