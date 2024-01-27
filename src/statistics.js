@@ -10,7 +10,7 @@ export function findAvg(items, field) {
 	}
 
 	const total = items.reduce((prev, curr) => { return prev + curr[field] }, 0)
-	return total / data.length
+	return total / items.length
 }
 
 
@@ -25,7 +25,7 @@ export function findMedian(items, field) {
 		throw new Error('Cannot find median from 0 items')
 	}
 
-	const values = items.toSorted((a, b) => a[field] - b[field])
+	const values = items.map((item) => item[field]).toSorted((a, b) => a - b)
 
 	const half = Math.floor(values.length / 2)
 
@@ -57,4 +57,14 @@ export function findMinMax(items, field) {
 	})
 
 	return { min, max }
+}
+
+/**
+ * 
+ * @param {number} min 
+ * @param {number} max 
+ * @returns random
+ */
+export function randomInt(min, max) {
+	return Math.floor(Math.random() * (max - min) + min)
 }
