@@ -1,4 +1,5 @@
 import { resizer } from './resizer.js'
+import { Render } from './render.js'
 import { hex2rgb } from './color.js'
 import { findMinMax, findAvg, findMedian } from './statistics.js'
 
@@ -14,6 +15,7 @@ export class Heatmap {
 		bg: '#FFFFFF',
 		medianColor: '#FF0000',
 		avgColor: '#0000FF',
+		noDataText: 'No data',
 		rgb: { r: 0, g: 0, b: 0 },
 		spacing: 1,
 		padding: 5,
@@ -79,18 +81,9 @@ export class Heatmap {
 	setData(data) {
 		this.data = [...data]
 
-		const rows = []
-
-		let row = []
-
-		this.data.forEach((item) => {
-			row.push(item)
-
-			if (row.length === this.config.rows) {
-				rows.push([...row])
-				row = []
-			}
-		})
+		if (data.length === 0) {
+			return
+		}
 
 		this.computed = {
 			...this.computed,
@@ -98,7 +91,6 @@ export class Heatmap {
 			...this.findItemsSize(data, 'value'),
 			median: findMedian(data, 'value'),
 			avg: findAvg(data, 'value'),
-			rows,
 		}
 	}
 
@@ -149,10 +141,42 @@ export class Heatmap {
 		return { width, height }
 	}
 
+	findScaleSize() {
+		const { padding } = this.config
+		const { width, height } = this.canvas
+
+		return {
+			x: padding,
+			y: height - this.scaleHeight,
+			w: width - padding * 2,
+			h: this.scaleHeight - padding,
+		}
+	}
+
+	renderScaleCursor(value, color) {
+		const ctx = this.ctx
+		const { padding } = this.config
+		let pos = value / this.computed.max
+
+		if (pos <= 0.005) {
+			pos = 0.005
+		}
+
+		ctx.lineWidth = 1
+		ctx.strokeStyle = color
+
+		const { x, y, w } = this.findScaleSize()
+
+		ctx.beginPath()
+		ctx.moveTo((w - x) * pos, y)
+		ctx.lineTo((w - x) * pos, y + this.scaleHeight - padding)
+		ctx.stroke()
+	}
+
 	renderScale() {
 		const ctx = this.ctx
-		const { padding, bg, fill, stroke, strokeHover, showMedian, showAvg } = this.config
-		const { width, height } = this.canvas
+		const { bg, fill, stroke, strokeHover, showMedian, showAvg } = this.config
+		const { width } = this.canvas
 
 		const gradient = ctx.createLinearGradient(0, 0, width, 0)
 
@@ -163,52 +187,21 @@ export class Heatmap {
 		ctx.fillStyle = gradient
 		ctx.strokeStyle = stroke
 
-		const x = padding
-		const y = height - this.scaleHeight
-		const w = width - padding * 2
-		const h = this.scaleHeight - padding
+		const { x, y, w, h } = this.findScaleSize()
 
 		ctx.fillRect(x, y, w, h)
 		ctx.strokeRect(x, y, w, h)
 
 		if (this.hoveredIndex !== -1) {
-			const item = this.data[this.hoveredIndex]
-
-			const pos = item.value / this.computed.max
-
-			ctx.lineWidth = 1
-			ctx.strokeStyle = strokeHover
-
-			ctx.beginPath()
-			ctx.moveTo((w - x) * pos, y)
-			ctx.lineTo((w - x) * pos, y + this.scaleHeight - padding)
-			ctx.stroke()
+			this.renderScaleCursor(this.data[this.hoveredIndex].value, strokeHover)
 		}
 
 		if (showMedian) {
-			const pos = this.computed.median / this.computed.max
-
-			console.log(this.computed.median, this.computed.max, pos)
-
-			ctx.lineWidth = 1
-			ctx.strokeStyle = this.config.medianColor
-
-			ctx.beginPath()
-			ctx.moveTo((w - x) * pos, y)
-			ctx.lineTo((w - x) * pos, y + this.scaleHeight - padding)
-			ctx.stroke()
+			this.renderScaleCursor(this.computed.median, this.config.medianColor)
 		}
 
 		if (showAvg) {
-			const pos = this.computed.avg / this.computed.max
-
-			ctx.lineWidth = 1
-			ctx.strokeStyle = this.config.avgColor
-
-			ctx.beginPath()
-			ctx.moveTo((w - x) * pos, y)
-			ctx.lineTo((w - x) * pos, y + this.scaleHeight - padding)
-			ctx.stroke()
+			this.renderScaleCursor(this.computed.avg, this.config.avgColor)
 		}
 	}
 
@@ -252,6 +245,11 @@ export class Heatmap {
 		ctx.fillStyle = this.config.bg
 		ctx.fillRect(0, 0, this.canvas.width, this.canvas.height)
 
+		if (this.data.length === 0) {
+			Render.noData(this.canvas, ctx, this.config.noDataText)
+			return
+		}
+
 		const area = this.findWorkArea(this.config)
 
 		const data = [...this.data]
@@ -260,13 +258,10 @@ export class Heatmap {
 			return
 		}
 
-		const { padding, spacing, rgb, rows, stroke, strokeHover } = this.config
+		const { spacing, rgb, rows, stroke, strokeHover } = this.config
 
 		let x = area.x
 		let y = area.y
-
-		const maxHeight = area.h
-		const maxWidth = area.w
 
 		if (this.config.showScale) {
 			this.renderScale()
