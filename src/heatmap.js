@@ -1,11 +1,57 @@
 import { resizer } from './resizer.js'
-import { Render } from './render.js'
+import { TextRenderer } from './renderers/text.js'
 import { hex2rgb } from './color.js'
 import { findMinMax, findAvg, findMedian } from './statistics.js'
+import { TooltipRenderer } from './renderers/tooltip.js'
+import { collideRect } from './collider.js'
+import { normalizeCursor } from './cursor.js'
+
+/**
+ * @typedef {{
+ * rows?: number
+ * cols?: number
+ * fill?: string
+ * stroke?: string
+ * hoverStroke?: string
+ * bg?: string
+ * medianColor?: string
+ * avgColor?: string
+ * noDataText?: string
+ * rgb?: {
+ *  r: number
+ *  g: number
+ *  b: number
+ * }
+ * spacing?: number
+ * padding?: number
+ * scaleHeight?: number
+ * labelSize?: number
+ * colLabelSkip?: number
+ * colLabelPosition?: 'top'|'bottom'|'both'|'none'
+ * rowLabelSkip?: number
+ * rowLabelPosition?: 'left'|'right'|'both'|'none'
+ * sumByCol?: boolean
+ * sumByRow?: boolean
+ * showScale?: boolean
+ * showMedian?: boolean
+ * showAvg?: boolean
+ * animationDuration?: number
+ * colLabelMethod?: Function
+ * rowLabelMethod?: Function
+ * onClick?: Function
+ * showTooltip? boolean
+ * tooltipLabelMethod?: Function
+ * }} HeatmapConfigParams
+ */
 
 
 export class Heatmap {
 	root = null
+	canvas = null
+	controlCanvas = null
+	controlCtx = null
+	ctx = null
+
 	config = {
 		rows: 7, // either cols or rows
 		cols: 0, // either cols or rows
@@ -19,15 +65,22 @@ export class Heatmap {
 		rgb: { r: 0, g: 0, b: 0 },
 		spacing: 1,
 		padding: 5,
+		scaleHeight: 30,
+		labelSize: 15,
+		colLabelSkip: 0,
+		colLabelPosition: 'both', // top, bottom, both, none
+		rowLabelSkip: 0,
+		rowLabelPosition: 'left', // left, right, both, none
 		sumByCol: false,
 		sumByRow: false,
 		showScale: false,
 		showMedian: false,
 		showAvg: false,
+		showTooltip: true,
 		colLabelMethod: () => '',
 		rowLabelMethod: () => '',
 		onClick: () => null,
-		tooltipLabelMethod: () => '',
+		tooltipLabelMethod: (item) => item.value,
 	}
 
 	data = []
@@ -41,15 +94,13 @@ export class Heatmap {
 		rows: [],
 	}
 
-	scaleHeight = 30
-
 	hoveredIndex = -1
 
 	/**
 	 * 
 	 * @param {HTMLElement} root 
 	 * @param {Array} data 
-	 * @param {Object} config 
+	 * @param {HeatmapConfigParams} config 
 	 */
 	constructor(root, data = [], config = {}) {
 		this.root = root
@@ -62,19 +113,29 @@ export class Heatmap {
 
 	create() {
 		const canvas = document.createElement('canvas')
+		const controlCanvas = document.createElement('canvas')
 
-		canvas.style = 'width: 100%; height: 100%;'
+		const style = 'position: absolute; width: 100%; height: 100%;'
+		canvas.style = style
+		controlCanvas.style = style
 
 		this.ctx = canvas.getContext('2d')
 		this.canvas = canvas
+		this.controlCanvas = controlCanvas
+
 		this.root.appendChild(canvas)
+		this.root.appendChild(controlCanvas)
 
 		this.resize()
 
 		resizer.watch(this)
 
-		this.canvas.addEventListener('mousemove', (e) => {
+		this.controlCanvas.addEventListener('mousemove', (e) => {
 			this.handleMouseMove(e.clientX, e.clientY)
+		})
+
+		this.controlCanvas.addEventListener('click', (e) => {
+			this.handleClick(e.clientX, e.clientY)
 		})
 	}
 
@@ -85,15 +146,32 @@ export class Heatmap {
 			return
 		}
 
+		const rows = []
+		let row = []
+
+		this.data.forEach((item, index) => {
+			row.push(item)
+
+			if (row.length >= this.config.rows) {
+				rows.push(row)
+				row = []
+			}
+		})
+
 		this.computed = {
 			...this.computed,
 			...findMinMax(data, 'value'),
 			...this.findItemsSize(data, 'value'),
 			median: findMedian(data, 'value'),
 			avg: findAvg(data, 'value'),
+			rows,
 		}
 	}
 
+	/**
+	 * 
+	 * @param {HeatmapConfigParams} config 
+	 */
 	setConfig(config) {
 		if (config?.rows > 0 && config?.cols > 0) {
 			throw new Error('It must be either cols or rows')
@@ -109,8 +187,12 @@ export class Heatmap {
 		this.config = newConfig
 	}
 
+	/**
+	 * 
+	 * @param {HeatmapConfigParams} config 
+	 */
 	findWorkArea(config) {
-		const { rows, padding, sumByCol, sumByRow, showScale } = config
+		const { rows, padding, sumByCol, sumByRow, showScale, scaleHeight } = config
 		const { width, height } = this.canvas
 
 		let w = width - padding * 2
@@ -120,42 +202,42 @@ export class Heatmap {
 		let y = padding
 
 		if (showScale) {
-			h -= this.scaleHeight
+			h -= scaleHeight
 		}
 
-		return { x, y, w, h }
+		return { x, y, width: w, height: h }
 	}
 
 	findItemsSize(data) {
 		const { spacing, rows } = this.config
 		const area = this.findWorkArea(this.config)
 
-		const h = area.h - (spacing * rows)
+		const h = area.height - (spacing * rows)
 		const height = Math.round(h / rows)
 
 		const c = Math.ceil(data.length / rows)
 
-		const w = area.w - (spacing * c)
+		const w = area.width - (spacing * c)
 		const width = w / c
 
 		return { width, height }
 	}
 
 	findScaleSize() {
-		const { padding } = this.config
+		const { padding, scaleHeight } = this.config
 		const { width, height } = this.canvas
 
 		return {
 			x: padding,
-			y: height - this.scaleHeight,
+			y: height - scaleHeight,
 			w: width - padding * 2,
-			h: this.scaleHeight - padding,
+			h: scaleHeight - padding,
 		}
 	}
 
 	renderScaleCursor(value, color) {
 		const ctx = this.ctx
-		const { padding } = this.config
+		const { padding, scaleHeight } = this.config
 		let pos = value / this.computed.max
 
 		if (pos <= 0.005) {
@@ -169,7 +251,7 @@ export class Heatmap {
 
 		ctx.beginPath()
 		ctx.moveTo((w - x) * pos, y)
-		ctx.lineTo((w - x) * pos, y + this.scaleHeight - padding)
+		ctx.lineTo((w - x) * pos, y + scaleHeight - padding)
 		ctx.stroke()
 	}
 
@@ -212,7 +294,8 @@ export class Heatmap {
 	findHovered(x, y) {
 		const area = this.findWorkArea(this.config)
 
-		if (x < area.x || y < area.y || x > area.w || y > area.h) {
+		if (!collideRect(area, x, y)) {
+			TooltipRenderer.clear(this.controlCanvas)
 			if (this.hoveredIndex !== -1) {
 				this.hoveredIndex = -1
 				this.render()
@@ -220,24 +303,26 @@ export class Heatmap {
 			return
 		}
 
-		const newIndex = this.rendered.findIndex((item) => {
-			if (item.x > x || item.y > y) {
-				return false
-			}
-
-			if (x > item.x + item.width || y > item.y + item.height) {
-				return false
-			}
-
-			return true
-		})
+		const newIndex = this.rendered.findIndex((item) => collideRect(item, x, y))
 
 		if (newIndex === this.hoveredIndex) {
 			return
 		}
 
+		TooltipRenderer.clear(this.controlCanvas)
+
 		this.hoveredIndex = newIndex
 		this.render()
+
+		if (this.config.showTooltip && newIndex !== -1) {
+			TooltipRenderer.renderTooltip(
+				this.controlCanvas,
+				this.rendered[newIndex].x,
+				this.rendered[newIndex].y,
+				this.config.tooltipLabelMethod(this.data[newIndex]),
+			)
+			return
+		}
 	}
 
 	render() {
@@ -246,7 +331,7 @@ export class Heatmap {
 		ctx.fillRect(0, 0, this.canvas.width, this.canvas.height)
 
 		if (this.data.length === 0) {
-			Render.noData(this.canvas, ctx, this.config.noDataText)
+			TextRenderer.noData(this.canvas, ctx, this.config.noDataText)
 			return
 		}
 
@@ -302,10 +387,20 @@ export class Heatmap {
 	resize() {
 		this.canvas.width = this.canvas.clientWidth
 		this.canvas.height = this.canvas.clientHeight
+		this.controlCanvas.width = this.canvas.clientWidth
+		this.controlCanvas.height = this.canvas.clientHeight
+		this.setData(this.data)
+		this.setConfig(this.config)
 	}
 
-	handleMouseMove(x, y) {
-		this.findHovered(x - this.canvas.offsetLeft, y - this.canvas.offsetTop)
+	handleMouseMove(cursorX, cursorY) {
+		const { x, y } = normalizeCursor(this.controlCanvas, cursorX, cursorY)
+		this.findHovered(x, y)
+	}
+
+	handleClick(cursorX, cursorY) {
+		const { x, y } = normalizeCursor(this.controlCanvas, cursorX, cursorY)
+		console.log(x, y)
 	}
 
 	dispose() {

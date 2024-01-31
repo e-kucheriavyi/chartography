@@ -1,6 +1,6 @@
 {
 	"name": "chartography",
-	"version": "0.0.6",
+	"version": "0.0.7",
 	"description": "Charts on canvas",
 	"main": "index.js",
 	"scripts": {

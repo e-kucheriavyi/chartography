@@ -7,7 +7,7 @@ export default {
 	tags: ['autodocs'],
 	render: ({ label, ...args }) => {
 		const container = document.createElement('div')
-		container.style = `width: ${args.width}; height: ${args.height};`
+		container.style = `position: relative; width: ${args.width}; height: ${args.height};`
 
 		const config = {
 			rows: args.rows,
@@ -62,7 +62,7 @@ let i = 0
 while (curr.getFullYear() === year) {
 	data.push({
 		label: new Date(curr),
-		value: randomInt(0, 10000),
+		value: i,// randomInt(0, 10000),
 	})
 
 	curr.setDate(curr.getDate() + 1)

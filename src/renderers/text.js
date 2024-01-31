@@ -1,4 +1,4 @@
-export class Render {
+export class TextRenderer {
 	/**
 	 * 
 	 * @param {HTMLCanvasElement} canvas 
